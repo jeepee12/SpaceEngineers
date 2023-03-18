@@ -33,6 +33,18 @@ public sealed class Program : MyGridProgram {
      */
     #region ConnectorAutomation
 
+    private Func<IMyTerminalBlock, bool> SameGridFilter;
+    private IMyShipConnector MainShipConnector = null;
+    private List<IMyBatteryBlock> AllBatteries = new List<IMyBatteryBlock>();
+    private List<IMyThrust> AllThrusters = new List<IMyThrust>();
+    private List<IMyGasTank> AllTanks = new List<IMyGasTank>();
+    private List<IMyAirVent> AllAirVent = new List<IMyAirVent>();
+    private List<IMyLightingBlock> AllLights = new List<IMyLightingBlock>();
+    private List<IMyCockpit> AllCockpits = new List<IMyCockpit>();
+
+    private MyShipConnectorStatus CurrentConnectorStatus = MyShipConnectorStatus.Unconnected;
+    private bool IsRunOnceMode = false;
+
     /*
      * The constructor, called only once every session and always before any 
      * other method is called. Use it to initialize your script. 
@@ -42,7 +54,66 @@ public sealed class Program : MyGridProgram {
      * It's recommended to set RuntimeInfo.UpdateFrequency here, which will 
      * allow your script to run itself without a timer block.
      */
-    public Program() {}
+    public Program() 
+    {
+        SameGridFilter = block => block.CubeGrid == Me.CubeGrid;
+        ConstructBlockLists();
+        LoadFromStorage();
+    }
+
+    private void LoadFromStorage()
+    {
+        bool.TryParse(Storage, out IsRunOnceMode);
+        Echo("Loading from storage. IsRunOnce:" + IsRunOnceMode);
+
+        if (IsRunOnceMode)
+        {
+            Runtime.UpdateFrequency = UpdateFrequency.Update10;
+        }
+    }
+
+    private void ConstructBlockLists()
+    {
+        FindMainConnector();
+
+        GridTerminalSystem.GetBlocksOfType(AllBatteries, SameGridFilter);
+        GridTerminalSystem.GetBlocksOfType(AllThrusters, SameGridFilter);
+        GridTerminalSystem.GetBlocksOfType(AllTanks, SameGridFilter);
+        GridTerminalSystem.GetBlocksOfType(AllAirVent, SameGridFilter);
+        GridTerminalSystem.GetBlocksOfType(AllLights, SameGridFilter);
+        GridTerminalSystem.GetBlocksOfType(AllCockpits, SameGridFilter);
+    }
+
+    private void FindMainConnector()
+    {
+        List<IMyShipConnector> allConnectors = new List<IMyShipConnector>();
+        GridTerminalSystem.GetBlocksOfType(allConnectors, SameGridFilter);
+        
+        if (allConnectors.Count == 1)
+        {
+            MainShipConnector = allConnectors[0];
+        }
+        else
+        {
+            foreach (var connector in allConnectors)
+            {
+                if (connector.CustomName.Contains("ToBase"))
+                {
+                    MainShipConnector = connector;
+                }
+            }
+            if (MainShipConnector == null)
+            {
+                Echo("ERR: " + allConnectors.Count + " connectors found. None contains ToBase.");
+            }
+        }
+        
+        if (MainShipConnector != null)
+        {
+            CurrentConnectorStatus = MainShipConnector.Status;
+        }
+    }
+
 
     /*
      * Called when the program needs to save its state. Use this method to save
@@ -50,7 +121,10 @@ public sealed class Program : MyGridProgram {
      * 
      * This method is optional and can be removed if not needed.
      */
-    public void Save() {}
+    public void Save() 
+    {
+        Storage = IsRunOnceMode.ToString();
+    }
 
     /*
      * The main entry point of the script, invoked every time one of the 
@@ -62,48 +136,61 @@ public sealed class Program : MyGridProgram {
      */
     public void Main(string argument, UpdateType updateSource) 
     {
-        IMyShipConnector mainShipConnector = FindMainConnector();
-
-        if (mainShipConnector == null)
+        if (updateSource == UpdateType.Update10)
         {
-            // No Matching Connector were found, exiting
-            return;
+            ExecuteFromUpdate();
         }
-
-        if (mainShipConnector.Status == MyShipConnectorStatus.Connected)
+        else if (updateSource == UpdateType.Terminal)
         {
-            mainShipConnector.Disconnect();
-            UpdateBlockStatus(false);
-        }
-        else if (mainShipConnector.Status == MyShipConnectorStatus.Connectable)
-        {
-            mainShipConnector.Connect();
-            UpdateBlockStatus(true);
+            IsRunOnceMode = argument == "Update";
+            Echo("Setting IsRunOnceMode to : " + IsRunOnceMode);
+            if (IsRunOnceMode)
+            {
+                Echo("To set the script in automatic mode, set the argument to 'Update'");
+                ExecuteFromDirectRun();
+            }
+            else
+            {
+		        Runtime.UpdateFrequency = UpdateFrequency.Update10;
+            }
         }
     }
 
-    private IMyShipConnector FindMainConnector()
+    private void ExecuteFromUpdate()
     {
-        IMyShipConnector mainShipConnector = null;
-        List<IMyShipConnector> allConnectors = new List<IMyShipConnector>();
-        GridTerminalSystem.GetBlocksOfType(allConnectors);
-        
-        if (allConnectors.Count == 1)
+        if (MainShipConnector.Status != CurrentConnectorStatus)
         {
-            mainShipConnector = allConnectors[0];
-        }
-        else
-        {
-            foreach (var connector in allConnectors)
+            CurrentConnectorStatus = MainShipConnector.Status;
+            if (MainShipConnector.Status == MyShipConnectorStatus.Connected)
             {
-                if (connector.CustomName.Contains("ToBase"))
-                {
-                    mainShipConnector = connector;
-                }
+                UpdateBlockStatus(false);
+            }
+            else if (MainShipConnector.Status == MyShipConnectorStatus.Connectable)
+            {
+                UpdateBlockStatus(true);
             }
         }
+    }
 
-        return mainShipConnector;
+    private void ExecuteFromDirectRun()
+    {
+        if (MainShipConnector == null)
+        {
+            // No Matching Connector were found, exiting
+			Echo("ERR: No connectors found.");
+            return;
+        }
+
+        if (MainShipConnector.Status == MyShipConnectorStatus.Connected)
+        {
+            UpdateBlockStatus(false);
+            MainShipConnector.Disconnect();
+        }
+        else if (MainShipConnector.Status == MyShipConnectorStatus.Connectable)
+        {
+            UpdateBlockStatus(true);
+            MainShipConnector.Connect();
+        }
     }
 
     private void UpdateBlockStatus(bool justConnected)
@@ -111,29 +198,89 @@ public sealed class Program : MyGridProgram {
         UpdateBatteriesStatus(justConnected);
         UpdateThrustersStatus(justConnected);
         UpdateTanksStatus(justConnected);
+        UpdateAirVentsStatus(justConnected);
+        UpdateLights(justConnected);
+        UpdateCockpits(justConnected);
     }
 
     private void UpdateBatteriesStatus(bool justConnected)
     {
+        int batteryStatusChanged = 0;
+        foreach (var battery in AllBatteries)
+        {
+            ++batteryStatusChanged;
 
-        // List<IMyBatteryBlock> allBatteries = new List<IMyBatteryBlock>();
+            battery.ChargeMode = justConnected ? ChargeMode.Recharge : ChargeMode.Auto;
+        }
+        Echo("Number of batteries changed:" + batteryStatusChanged);
     }
 
     private void UpdateThrustersStatus(bool justConnected)
     {
         // Turn On/off all thruster (hydro, atmo and ion)
+        foreach (var thruster in AllThrusters)
+        {
+            thruster.Enabled = !justConnected;
+        }
     }
 
     private void UpdateTanksStatus(bool justConnected)
     {
-        // set O2 and H2 to stockpile On/Off
+        // Set O2 and H2 to stockpile On/Off
+        foreach (var tank in AllTanks)
+        {
+            if (justConnected)
+            {
+                tank.Stockpile = true;
+            }
+            else
+            {
+                tank.Stockpile = false;
+            }
+        }
     }
 
     private void UpdateAirVentsStatus(bool justConnected)
     {
         // if contains "int." => pressu on disconnect
         // if contains "ext." => toggle on/off
+        foreach (var airVent in AllAirVent)
+        {
+            if (airVent.CustomName.Contains("int."))
+            {
+                if (!justConnected)
+                {
+                    airVent.Depressurize = false;
+                    airVent.Enabled = true;
+                }
+            }
+            else if (airVent.CustomName.Contains("ext."))
+            {
+                if (justConnected)
+                {
+                    airVent.Depressurize = true;
+                }
+                airVent.Enabled = justConnected;
+            }
+        }
     }
+
+    private void UpdateLights(bool justConnected)
+    {
+        foreach (var light in AllLights)
+        {
+            light.Enabled = !justConnected;
+        }
+    }
+
+    private void UpdateCockpits(bool justConnected)
+    {
+        foreach (var cockpit in AllCockpits)
+        {
+            cockpit.HandBrake = justConnected;
+        }
+    }
+
 
     #endregion // ConnectorAutomation
 }}
