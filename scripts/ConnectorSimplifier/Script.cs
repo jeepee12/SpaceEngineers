@@ -33,6 +33,8 @@ public sealed class Program : MyGridProgram {
      */
     #region ConnectorSimplifier
 
+    Func<IMyTerminalBlock, bool> SameGridFilter;
+
     /*
      * The constructor, called only once every session and always before any 
      * other method is called. Use it to initialize your script. 
@@ -44,6 +46,7 @@ public sealed class Program : MyGridProgram {
      */
     public Program() 
     {
+        SameGridFilter = block => block.CubeGrid == Me.CubeGrid;
     }
 
     /*
@@ -89,7 +92,7 @@ public sealed class Program : MyGridProgram {
     {
         IMyShipConnector mainShipConnector = null;
         List<IMyShipConnector> allConnectors = new List<IMyShipConnector>();
-        GridTerminalSystem.GetBlocksOfType(allConnectors);
+        GridTerminalSystem.GetBlocksOfType(allConnectors, SameGridFilter);
         
         if (allConnectors.Count == 1)
         {
@@ -99,7 +102,7 @@ public sealed class Program : MyGridProgram {
         {
             foreach (var connector in allConnectors)
             {
-                if (connector.CubeGrid == Me.CubeGrid && connector.CustomName.Contains("ToBase"))
+                if (connector.CustomName.Contains("ToBase"))
                 {
                     mainShipConnector = connector;
                 }
@@ -126,22 +129,19 @@ public sealed class Program : MyGridProgram {
     {
         List<IMyBatteryBlock> allBatteries = new List<IMyBatteryBlock>();
         // TODO use lambda to check grid is same
-        GridTerminalSystem.GetBlocksOfType(allBatteries);
+        GridTerminalSystem.GetBlocksOfType(allBatteries, SameGridFilter);
         int batteryStatusChanged = 0;
         foreach (var battery in allBatteries)
         {
-            if (battery.CubeGrid == Me.CubeGrid)
-            {
-                ++batteryStatusChanged;
+            ++batteryStatusChanged;
 
-                if (justConnected)
-                {
-                    battery.ChargeMode = ChargeMode.Recharge;
-                }
-                else
-                {
-                    battery.ChargeMode = ChargeMode.Auto;
-                }
+            if (justConnected)
+            {
+                battery.ChargeMode = ChargeMode.Recharge;
+            }
+            else
+            {
+                battery.ChargeMode = ChargeMode.Auto;
             }
         }
         Echo("Number of batteries changed:" + batteryStatusChanged);
@@ -151,13 +151,10 @@ public sealed class Program : MyGridProgram {
     {
         // Turn On/off all thruster (hydro, atmo and ion)
         List<IMyThrust> allThrusters = new List<IMyThrust>();
-        GridTerminalSystem.GetBlocksOfType(allThrusters);
+        GridTerminalSystem.GetBlocksOfType(allThrusters, SameGridFilter);
         foreach (var thruster in allThrusters)
         {
-            if (thruster.CubeGrid == Me.CubeGrid)
-            {
-                thruster.Enabled = !justConnected;
-            }
+            thruster.Enabled = !justConnected;
         }
     }
 
@@ -165,19 +162,16 @@ public sealed class Program : MyGridProgram {
     {
         // set O2 and H2 to stockpile On/Off
         List<IMyGasTank> allTanks = new List<IMyGasTank>();
-        GridTerminalSystem.GetBlocksOfType(allTanks);
+        GridTerminalSystem.GetBlocksOfType(allTanks, SameGridFilter);
         foreach (var tank in allTanks)
         {
-            if (tank.CubeGrid == Me.CubeGrid)
+            if (justConnected)
             {
-                if (justConnected)
-                {
-                    tank.Stockpile = true;
-                }
-                else
-                {
-                    tank.Stockpile = false;
-                }
+                tank.Stockpile = true;
+            }
+            else
+            {
+                tank.Stockpile = false;
             }
         }
     }
@@ -187,27 +181,24 @@ public sealed class Program : MyGridProgram {
         // if contains "int." => pressu on disconnect
         // if contains "ext." => toggle on/off
         List<IMyAirVent> allAirVent = new List<IMyAirVent>();
-        GridTerminalSystem.GetBlocksOfType(allAirVent);
+        GridTerminalSystem.GetBlocksOfType(allAirVent, SameGridFilter);
         foreach (var airVent in allAirVent)
         {
-            if (airVent.CubeGrid == Me.CubeGrid)
+            if (airVent.CustomName.Contains("int."))
             {
-                if (airVent.CustomName.Contains("int."))
+                if (!justConnected)
                 {
-                    if (!justConnected)
-                    {
-                        airVent.Depressurize = false;
-                        airVent.Enabled = true;
-                    }
+                    airVent.Depressurize = false;
+                    airVent.Enabled = true;
                 }
-                else if (airVent.CustomName.Contains("ext."))
+            }
+            else if (airVent.CustomName.Contains("ext."))
+            {
+                if (justConnected)
                 {
-                    if (justConnected)
-                    {
-                        airVent.Depressurize = true;
-                    }
-                    airVent.Enabled = justConnected;
+                    airVent.Depressurize = true;
                 }
+                airVent.Enabled = justConnected;
             }
         }
     }
@@ -215,13 +206,10 @@ public sealed class Program : MyGridProgram {
     private void UpdateLights(bool justConnected)
     {
         List<IMyLightingBlock> allLights = new List<IMyLightingBlock>();
-        GridTerminalSystem.GetBlocksOfType(allLights);
+        GridTerminalSystem.GetBlocksOfType(allLights, SameGridFilter);
         foreach (var light in allLights)
         {
-            if (light.CubeGrid == Me.CubeGrid)
-            {
-                light.Enabled = !justConnected;
-            }
+            light.Enabled = !justConnected;
         }
     }
 
