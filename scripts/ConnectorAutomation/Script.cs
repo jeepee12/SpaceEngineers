@@ -229,14 +229,7 @@ public sealed class Program : MyGridProgram {
         // Set O2 and H2 to stockpile On/Off
         foreach (var tank in AllTanks)
         {
-            if (justConnected)
-            {
-                tank.Stockpile = true;
-            }
-            else
-            {
-                tank.Stockpile = false;
-            }
+            tank.Stockpile = justConnected;
         }
     }
 
