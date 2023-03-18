@@ -123,12 +123,12 @@ public sealed class Program : MyGridProgram {
         UpdateTanksStatus(justConnected);
         UpdateAirVentsStatus(justConnected);
         UpdateLights(justConnected);
+        UpdateCockpits(justConnected);
     }
 
     private void UpdateBatteriesStatus(bool justConnected)
     {
         List<IMyBatteryBlock> allBatteries = new List<IMyBatteryBlock>();
-        // TODO use lambda to check grid is same
         GridTerminalSystem.GetBlocksOfType(allBatteries, SameGridFilter);
         int batteryStatusChanged = 0;
         foreach (var battery in allBatteries)
@@ -160,7 +160,7 @@ public sealed class Program : MyGridProgram {
 
     private void UpdateTanksStatus(bool justConnected)
     {
-        // set O2 and H2 to stockpile On/Off
+        // Set O2 and H2 to stockpile On/Off
         List<IMyGasTank> allTanks = new List<IMyGasTank>();
         GridTerminalSystem.GetBlocksOfType(allTanks, SameGridFilter);
         foreach (var tank in allTanks)
@@ -210,6 +210,16 @@ public sealed class Program : MyGridProgram {
         foreach (var light in allLights)
         {
             light.Enabled = !justConnected;
+        }
+    }
+
+    private void UpdateCockpits(bool justConnected)
+    {
+        List<IMyCockpit> allCockpits = new List<IMyCockpit>();
+        GridTerminalSystem.GetBlocksOfType(allCockpits, SameGridFilter);
+        foreach (var cockpit in allCockpits)
+        {
+            cockpit.HandBrake = justConnected;
         }
     }
 
