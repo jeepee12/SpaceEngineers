@@ -43,7 +43,7 @@ public sealed class Program : MyGridProgram {
     private List<IMyCockpit> AllCockpits = new List<IMyCockpit>();
 
     private MyShipConnectorStatus CurrentConnectorStatus = MyShipConnectorStatus.Unconnected;
-    private bool IsRunOnceMode = false;
+    private bool IsRunAutomaticMode = false;
 
     /*
      * The constructor, called only once every session and always before any 
@@ -63,10 +63,10 @@ public sealed class Program : MyGridProgram {
 
     private void LoadFromStorage()
     {
-        bool.TryParse(Storage, out IsRunOnceMode);
-        Echo("Loading from storage. IsRunOnce:" + IsRunOnceMode);
+        bool.TryParse(Storage, out IsRunAutomaticMode);
+        Echo("Loading from storage. IsRunAutomaticMode:" + IsRunAutomaticMode);
 
-        if (IsRunOnceMode)
+        if (IsRunAutomaticMode)
         {
             Runtime.UpdateFrequency = UpdateFrequency.Update10;
         }
@@ -123,7 +123,7 @@ public sealed class Program : MyGridProgram {
      */
     public void Save() 
     {
-        Storage = IsRunOnceMode.ToString();
+        Storage = IsRunAutomaticMode.ToString();
     }
 
     /*
@@ -136,23 +136,24 @@ public sealed class Program : MyGridProgram {
      */
     public void Main(string argument, UpdateType updateSource) 
     {
-        if (updateSource == UpdateType.Update10)
+        if (updateSource != UpdateType.Update10)
         {
-            ExecuteFromUpdate();
-        }
-        else if (updateSource == UpdateType.Terminal)
-        {
-            IsRunOnceMode = argument == "Update";
-            Echo("Setting IsRunOnceMode to : " + IsRunOnceMode);
-            if (IsRunOnceMode)
+            IsRunAutomaticMode = argument == "Update";
+            Echo("Setting IsRunAutomaticMode to : " + IsRunAutomaticMode);
+            if (!IsRunAutomaticMode)
             {
                 Echo("To set the script in automatic mode, set the argument to 'Update'");
                 ExecuteFromDirectRun();
+                Runtime.UpdateFrequency = UpdateFrequency.None;
             }
             else
             {
 		        Runtime.UpdateFrequency = UpdateFrequency.Update10;
             }
+        }
+        else
+        {
+            ExecuteFromUpdate();
         }
     }
 
@@ -160,15 +161,18 @@ public sealed class Program : MyGridProgram {
     {
         if (MainShipConnector.Status != CurrentConnectorStatus)
         {
-            CurrentConnectorStatus = MainShipConnector.Status;
+            Echo("Status changed. Automatic update executing.");
             if (MainShipConnector.Status == MyShipConnectorStatus.Connected)
             {
-                UpdateBlockStatus(false);
-            }
-            else if (MainShipConnector.Status == MyShipConnectorStatus.Connectable)
-            {
+                // Just Connected
                 UpdateBlockStatus(true);
             }
+            else if (CurrentConnectorStatus == MyShipConnectorStatus.Connected)
+            {
+                // Status changed and we were connected, so we just disconnected
+                UpdateBlockStatus(false);
+            }
+            CurrentConnectorStatus = MainShipConnector.Status;
         }
     }
 
@@ -185,11 +189,13 @@ public sealed class Program : MyGridProgram {
         {
             UpdateBlockStatus(false);
             MainShipConnector.Disconnect();
+            Echo("Connector Disconnected");
         }
         else if (MainShipConnector.Status == MyShipConnectorStatus.Connectable)
         {
             UpdateBlockStatus(true);
             MainShipConnector.Connect();
+            Echo("Connector Connected");
         }
     }
 
