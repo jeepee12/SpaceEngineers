@@ -56,6 +56,7 @@ public sealed class Program : MyGridProgram {
      */
     public Program() 
     {
+        // TODO Create a version of the scrip for toggling a ship connected to the base from the base using: MainShipConnector.CubeGrid.IsStatic
         SameGridFilter = block => block.CubeGrid == Me.CubeGrid;
         ConstructBlockLists();
         LoadFromStorage();
