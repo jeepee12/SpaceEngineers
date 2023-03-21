@@ -44,6 +44,7 @@ public sealed class Program : MyGridProgram {
 
     private MyShipConnectorStatus CurrentConnectorStatus = MyShipConnectorStatus.Unconnected;
     private bool IsRunAutomaticMode = false;
+    private bool BlockListConstructed = false;
 
     /*
      * The constructor, called only once every session and always before any 
@@ -56,10 +57,17 @@ public sealed class Program : MyGridProgram {
      */
     public Program() 
     {
-        // TODO Create a version of the scrip for toggling a ship connected to the base from the base using: MainShipConnector.CubeGrid.IsStatic
-        SameGridFilter = block => block.CubeGrid == Me.CubeGrid;
-        ConstructBlockLists();
-        LoadFromStorage();
+        if (!Me.CubeGrid.IsStatic)
+        {
+            SameGridFilter = block => block.CubeGrid == Me.CubeGrid;
+            FindMainConnector();
+            ConstructBlockLists();
+            LoadFromStorage();
+        }
+        else
+        {
+            Echo("The grid is static, nothing loaded.");
+        }
     }
 
     private void LoadFromStorage()
@@ -75,7 +83,24 @@ public sealed class Program : MyGridProgram {
 
     private void ConstructBlockLists()
     {
-        FindMainConnector();
+        if (BlockListConstructed)
+            return;
+
+        if (Me.CubeGrid.IsStatic)
+        {
+            // The MainConnector is suppose to be not null and connected
+            IMyCubeGrid otherGrid = MainShipConnector?.OtherConnector?.CubeGrid;
+            if (otherGrid == null)
+            {
+                Echo("The other grid was not found.");
+                return;
+            }
+            SameGridFilter = block => block?.CubeGrid == otherGrid;
+        }
+        else
+        {
+            SameGridFilter = block => block.CubeGrid == Me.CubeGrid;
+        }
 
         GridTerminalSystem.GetBlocksOfType(AllBatteries, SameGridFilter);
         GridTerminalSystem.GetBlocksOfType(AllThrusters, SameGridFilter);
@@ -83,12 +108,21 @@ public sealed class Program : MyGridProgram {
         GridTerminalSystem.GetBlocksOfType(AllAirVent, SameGridFilter);
         GridTerminalSystem.GetBlocksOfType(AllLights, SameGridFilter);
         GridTerminalSystem.GetBlocksOfType(AllCockpits, SameGridFilter);
+        BlockListConstructed = true;
     }
 
-    private void FindMainConnector()
+    private void FindMainConnector(string connectorName = null)
     {
+        bool noName = String.IsNullOrWhiteSpace(connectorName);
+        if (noName && Me.CubeGrid.IsStatic)
+        {
+            Echo("The grid is static and no connector name where given.");
+            return;
+        }
+
         List<IMyShipConnector> allConnectors = new List<IMyShipConnector>();
-        GridTerminalSystem.GetBlocksOfType(allConnectors, SameGridFilter);
+        // We cannot use SameGridFilter because it's not set in the case of a static grid
+        GridTerminalSystem.GetBlocksOfType(allConnectors, block => block.CubeGrid == Me.CubeGrid);
         
         if (allConnectors.Count == 1)
         {
@@ -98,9 +132,18 @@ public sealed class Program : MyGridProgram {
         {
             foreach (var connector in allConnectors)
             {
+                if (!noName)
+                {
+                    if (connector.CustomName == connectorName)
+                    {
+                        MainShipConnector = connector;
+                        break;
+                    }
+                }
                 if (connector.CustomName.Contains("ToBase"))
                 {
                     MainShipConnector = connector;
+                    break;
                 }
             }
             if (MainShipConnector == null)
@@ -143,8 +186,16 @@ public sealed class Program : MyGridProgram {
             Echo("Setting IsRunAutomaticMode to : " + IsRunAutomaticMode);
             if (!IsRunAutomaticMode)
             {
-                Echo("To set the script in automatic mode, set the argument to 'Update'");
-                ExecuteFromDirectRun();
+                if (Me.CubeGrid.IsStatic)
+                {
+                    Echo("Running from a static grid. Looking for connector named: " + argument);
+                    ExecuteFromStaticGrid(argument);
+                }
+                else
+                {
+                    Echo("To set the script in automatic mode, set the argument to 'Update'");
+                    ExecuteFromDirectRun();
+                }
                 Runtime.UpdateFrequency = UpdateFrequency.None;
             }
             else
@@ -182,7 +233,7 @@ public sealed class Program : MyGridProgram {
         if (MainShipConnector == null)
         {
             // No Matching Connector were found, exiting
-			Echo("ERR: No connectors found.");
+            Echo("ERR: No connectors found.");
             return;
         }
 
@@ -196,6 +247,39 @@ public sealed class Program : MyGridProgram {
         {
             UpdateBlockStatus(true);
             MainShipConnector.Connect();
+            Echo("Connector Connected");
+        }
+    }
+
+    private void ExecuteFromStaticGrid(string argument)
+    {
+        if (MainShipConnector == null)
+        {
+            FindMainConnector(argument);
+            if (MainShipConnector == null)
+            {
+                Echo("No connector named " + argument + " were fround.");
+                return;
+            }
+        }
+
+        if (MainShipConnector.Status == MyShipConnectorStatus.Connected)
+        {
+            ConstructBlockLists();
+            UpdateBlockStatus(false);
+            MainShipConnector.Disconnect();
+            Echo("Connector Disconnected");
+        }
+        else if (MainShipConnector.Status == MyShipConnectorStatus.Connectable)
+        {
+            MainShipConnector.Connect();
+            if (SameGridFilter == null || !SameGridFilter(MainShipConnector.OtherConnector))
+            {
+                // We cannot keep our cache since a different ship docked.
+                BlockListConstructed = false;
+                ConstructBlockLists();
+            }
+            UpdateBlockStatus(true);
             Echo("Connector Connected");
         }
     }
