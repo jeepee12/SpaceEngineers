@@ -130,21 +130,20 @@ public sealed class Program : MyGridProgram {
         }
         else
         {
-            foreach (var connector in allConnectors)
+            if (noName)
             {
-                if (!noName)
+                foreach (var connector in allConnectors)
                 {
-                    if (connector.CustomName == connectorName)
+                    if (connector.CustomName.Contains("ToBase"))
                     {
                         MainShipConnector = connector;
                         break;
                     }
                 }
-                if (connector.CustomName.Contains("ToBase"))
-                {
-                    MainShipConnector = connector;
-                    break;
-                }
+            }
+            else
+            {
+                MainShipConnector = GridTerminalSystem.GetBlockWithName(connectorName) as IMyShipConnector;
             }
             if (MainShipConnector == null)
             {
