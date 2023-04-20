@@ -41,6 +41,8 @@ public sealed class Program : MyGridProgram {
     private List<IMyAirVent> AllAirVent = new List<IMyAirVent>();
     private List<IMyLightingBlock> AllLights = new List<IMyLightingBlock>();
     private List<IMyCockpit> AllCockpits = new List<IMyCockpit>();
+    private List<IMyBeacon> AllBeacon = new List<IMyBeacon>();
+    private List<IMyRadioAntenna> AllAntenna = new List<IMyRadioAntenna>();
 
     private MyShipConnectorStatus CurrentConnectorStatus = MyShipConnectorStatus.Unconnected;
     private bool IsRunAutomaticMode = false;
@@ -108,6 +110,8 @@ public sealed class Program : MyGridProgram {
         GridTerminalSystem.GetBlocksOfType(AllAirVent, SameGridFilter);
         GridTerminalSystem.GetBlocksOfType(AllLights, SameGridFilter);
         GridTerminalSystem.GetBlocksOfType(AllCockpits, SameGridFilter);
+        GridTerminalSystem.GetBlocksOfType(AllBeacon, SameGridFilter);
+        GridTerminalSystem.GetBlocksOfType(AllAntenna, SameGridFilter);
         BlockListConstructed = true;
     }
 
@@ -290,6 +294,7 @@ public sealed class Program : MyGridProgram {
         UpdateTanksStatus(justConnected);
         UpdateAirVentsStatus(justConnected);
         UpdateLights(justConnected);
+        UpdateBeaconAndAntenna(justConnected);
         UpdateCockpits(justConnected);
     }
 
@@ -351,6 +356,18 @@ public sealed class Program : MyGridProgram {
     private void UpdateLights(bool justConnected)
     {
         foreach (var light in AllLights)
+        {
+            light.Enabled = !justConnected;
+        }
+    }
+
+    private void UpdateBeaconAndAntenna(bool justConnected)
+    {
+        foreach (var light in AllBeacon)
+        {
+            light.Enabled = !justConnected;
+        }
+        foreach (var light in AllAntenna)
         {
             light.Enabled = !justConnected;
         }
